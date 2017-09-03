@@ -1,0 +1,12 @@
+- debug:
+        msg: "{{ force }}"
+
+- name: Remove storage domain
+  ovirt_storage_domains:
+      state: absent
+      id: "{{ storage.id }}"
+      name: "{{ storage.name }}"
+      auth: "{{ ovirt_auth }}"
+      host: "{{ host }}"
+      destroy: "{{ force }}"
+      data_center: "{{ sp_uuid }}"

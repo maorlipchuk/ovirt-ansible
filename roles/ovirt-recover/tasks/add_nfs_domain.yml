@@ -1,0 +1,15 @@
+- name: Fetch active host in data center
+  ovirt_hosts_facts:
+      pattern: "status=up and datacenter={{ storage.DC_name }}"
+      auth: "{{ ovirt_auth }}"
+
+# TODO: Check if we can attach multiple storage domains
+- name: Import NFS storage domain
+  ovirt_storage_domains:
+      name: "{{ storage.name }}"
+      host: "{{ ovirt_hosts[0].name }}"
+      data_center: "{{ storage.DC_name }}"
+      auth: "{{ ovirt_auth }}"
+      nfs:
+          address: "{{ storage.address }}"
+          path: "{{ storage.path }}"

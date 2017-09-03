@@ -1,0 +1,10 @@
+- name: Run highly available VMs
+  ovirt_vms:
+      state: stopped
+      name: "{{ vms.name }}"
+      force: True
+      wait: False
+      auth: "{{ ovirt_auth }}"
+      # TODO: Add support for pin to host: Should the host be predefine?
+      #host: "ovirt_hosts[0].name"
+

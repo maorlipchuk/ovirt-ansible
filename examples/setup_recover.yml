@@ -1,0 +1,13 @@
+- name: Setup oVirt environment
+  hosts: localhost
+  connection: local
+  vars:
+     detach: "{{ clean | default(False) }}"
+     recover: "{{ recovered | default(False) }}"
+     target_host: "{{ host | default('primary') }}"
+  vars_files:
+    - group_vars/ovirt_password.yml
+    - group_vars/setup_vars
+  roles:
+     - { role: clean_engine, when: detach }
+     - { role: recover, when: recover }

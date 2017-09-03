@@ -1,0 +1,82 @@
+- block:
+    - name: Obtain SSO token
+      ovirt_auth:
+          url: "{{ DR_sites[target_host].url }}"
+          username: "{{ DR_sites[target_host].username }}"
+          # TODO: Set password per site
+          password: "{{ password }}"
+          ca_file: "{{ DR_sites[target_host].ca_file }}"
+
+    # TODO: execute OVF_UPDATE
+    # Get all the running VMs and shut them down
+    - name: Fetch VMs in the setup
+      ovirt_vms_facts:
+          pattern:  status != down
+          auth: "{{ ovirt_auth }}"
+
+    - include_tasks: tasks/shutdown_vms.yml vms={{ item }}
+      with_items: "{{ ovirt_vms }}"
+
+    # TODO: add a test of ISO and export storage domain.
+    # We first remove all the non master storage domain.
+    - name: Fetch valid storage domains for detach
+      ovirt_storage_domains_facts:
+          pattern:  status = active or status = maintenance or status = unattached and type != glance
+          auth: "{{ ovirt_auth }}"
+
+    - name: Set force remove flag to false
+      set_fact: force=False
+    - include_tasks: ../tasks/remove_domain_process.yml storage={{ item }}
+      with_items:
+          - "{{ ovirt_storage_domains }}"
+      when: "not item.master"
+
+    # We use inactive filter only at the end, since we are not sure if there were any storage domains
+    # which became inactive on the process or if there were any on the beginning.
+    - name: Fetch invalid storage domains to remove
+      ovirt_storage_domains_facts:
+          # TODO: Should check also about Cinder
+          pattern: status != active and type != glance
+          auth: "{{ ovirt_auth }}"
+
+    - name: Set force remove flag to true
+      set_fact: force=True
+    - include_tasks: ../tasks/remove_domain_process.yml storage={{ item }}
+      with_items:
+          - "{{ ovirt_storage_domains }}"
+      when: "not item.master"
+
+    # Try to remove the master storage domains, if we fail we will try later to force remove all
+    # inactive master domains.
+    - name: Fetch valid storage domains for detach master
+      ovirt_storage_domains_facts:
+          pattern:  status = active or status = maintenance
+          auth: "{{ ovirt_auth }}"
+
+    - name: Set force remove flag to false
+      set_fact: force=False
+    - include_tasks: ../tasks/remove_domain_process.yml storage={{ item }}
+      with_items:
+          - "{{ ovirt_storage_domains }}"
+      when: "item.master"
+
+    # If by any chance the master storage domain is inactive we force remove it.
+    - name: Set force remove flag to true
+      set_fact: force=True
+
+    - name: Fetch invalid storage domains to remove master
+      ovirt_storage_domains_facts:
+          pattern: status != active and type != glance
+          auth: "{{ ovirt_auth }}"
+
+    - include_tasks: ../tasks/remove_domain_process.yml storage={{ item }}
+      with_items:
+          - "{{ ovirt_storage_domains }}"
+
+  ignore_errors: "{{ ignore_errors | default(\"yes\") }}"
+- always:
+    - name: Revoke the SSO token
+      ovirt_auth:
+          state: absent
+          ovirt_auth: "{{ ovirt_auth }}"
+

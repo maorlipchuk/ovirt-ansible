@@ -1,0 +1,8 @@
+# Should perform clean on the setup - Remove all storage domains.
+clean: "False"
+
+# Should the ansible play ignore errors on the way or not.
+ignore: "yes"
+
+# Indicates which host should the ansible script be executed (Optional values are primary and secondary).
+host: 'primary'

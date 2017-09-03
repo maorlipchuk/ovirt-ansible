@@ -1,0 +1,30 @@
+- name: Fetch unregistered VMs from storage domain
+  ovirt_storage_vms_facts:
+      nested_attributes: "id"
+      unregistered: True
+      storage_domain: "{{ storage.name }}"
+      auth: "{{ ovirt_auth }}"
+
+# TODO: We should filter out vms which were already exists in the setup (diskless VMs)
+- name: Register unregistered VM
+  ovirt_vms:
+      state: registered
+      storage_domain: "{{ storage.name }}"
+      id: "{{ unreg_vm.id }}"
+      # TODO: cluster should be part of VM's OVF
+      auth: "{{ ovirt_auth }}"
+      allow_partial_import: "{{ partial_import | default(True) }}"
+      cluster_mappings:
+        - source:
+          - name: test
+          dest:
+          - name: cluster44
+
+      # The main task already declared ignore errors so that might be redundant to put it here
+      # ignore_errors: "{{ ignore | default(yes) }}"
+  with_items: "{{ ovirt_storage_vms }}"
+  # We use loop_control so storage.name will not be overriden by the nested loop.
+  loop_control:
+      loop_var: unreg_vm
+
+

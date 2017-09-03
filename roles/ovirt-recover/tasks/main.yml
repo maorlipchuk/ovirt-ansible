@@ -1,0 +1,80 @@
+- block:
+    - name: Obtain SSO token
+      ovirt_auth:
+          url: "{{ DR_sites[target_host].url }}"
+          username: "{{ DR_sites[target_host].username }}"
+          # TODO: Set password per site
+          password: "{{ password }}"
+          ca_file: "{{ DR_sites[target_host].ca_file }}"
+
+    # TODO: We should add a validation task that will validate whether
+    # all the hosts in the other site (primary or secondary) could not be connected
+    # and also set a timer that will wait at least 180 seconds until the first 
+    # attach will take place. We should do that to prevent sanlock failure with acquire
+    # lockspace. We should use a flag with default true whether to have thise check
+    # or not.
+
+    # TODO: What happens if master is failed to be attached,
+    # do we still want to continue and attach the other storage
+    # domain (which will make another storage domain as master instead).
+    #    - include_tasks: tasks/add_nfs_domain.yml storage={{ item }}
+    #  with_inventory_hostnames: master_domains
+
+    # TODO: We should filter the type of the master storage domain to know which task to call
+    # add_nfs or block storage domain
+    - include_tasks: tasks/add_nfs_domain.yml storage={{ item[target_host] }}
+      with_items:
+        - "{{ master_domains }}"
+
+     # Add all the nfs storage domains to the setup
+    # TODO: Add also type for Gluster and POSIX.
+    - include_tasks: tasks/add_nfs_domain.yml storage={{ item[target_host] }}
+      with_items:
+        - "{{ import_NFS }}"
+
+    # Add all the iSCSI storage domains to the setup
+    # TODO: Add also FCP.
+    - include_tasks: tasks/add_block_domain.yml storage={{ item[target_host] }}
+      with_items:
+      - "{{ import_iSCSI }}"
+
+    # Get all the active storage domains in the setup to register
+    # all the templates/VMs/Disks
+    - name: Fetching active storage domains
+      ovirt_storage_domains_facts:
+          pattern: "status=active"
+          auth: "{{ ovirt_auth }}"
+
+    # First register all the unregistered templates based on the
+    # active storage domains we fetched before.
+    # We register the Templates first since we might have
+    # VMs which are based on them
+    - include_tasks: tasks/register_templates.yml storage={{ item }}
+      with_items:
+        - "{{ ovirt_storage_domains }}"
+
+    # Register all the unregistered VMs after we registerd
+    # all the templates from the active storage domains
+    #fetched before.
+    - include_tasks: tasks/register_vms.yml storage={{ item }}
+      with_items:
+        - "{{ ovirt_storage_domains }}"
+
+    # Get all the VMs from the setup to know which one to run
+    - name: Fetch VMs in the setup
+      ovirt_vms_facts:
+          pattern: name=*
+          auth: "{{ ovirt_auth }}"
+
+    # Run all the high availability VMs.
+    - include_tasks: tasks/run_vms.yml vms={{ item }}
+      with_items: "{{ ovirt_vms }}"
+      when: item.status == 'up' and item.high_availability.enabled | bool
+
+  ignore_errors: "{{ ignore | default(\"yes\") }}"
+
+- always:
+     - name: Revoke the SSO token
+       ovirt_auth:
+           state: absent
+           ovirt_auth: "{{ ovirt_auth }}"
